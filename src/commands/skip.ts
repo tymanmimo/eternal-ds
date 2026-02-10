@@ -8,9 +8,5 @@ export const skipCommand = async (interaction: ChatInputCommandInteraction) => {
     if (!queue || !queue.isPlaying()) {
         return interaction.reply('Nothing is playing that I could skip.');
     }
-
-    const currentTrack = queue.currentTrack;
     queue.node.skip();
-
-    return interaction.reply(`Skipped: **${currentTrack?.author + ' - ' + currentTrack?.title}**`);
 };

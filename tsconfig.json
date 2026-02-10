@@ -5,7 +5,9 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,
+        "resolveJsonModule": true,
         "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
         "skipLibCheck": true
     }
 }

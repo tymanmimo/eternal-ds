@@ -19,6 +19,9 @@ const commands = [
                 .setDescription('Song name or link')
                 .setRequired(true)),
     new SlashCommandBuilder()
+        .setName('pause')
+        .setDescription('Pause or resume playback'),
+    new SlashCommandBuilder()
         .setName('skip')
         .setDescription('Skip the current track'),
     new SlashCommandBuilder()
@@ -34,7 +37,7 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
             Routes.applicationCommands(CLIENT_ID),
             { body: commands },
         );
-        console.log('Successfully reloaded global slash commands!');
+        console.log('Successfully reloaded global slash commands');
     } catch (error) {
         console.error('Error', error);
     }
