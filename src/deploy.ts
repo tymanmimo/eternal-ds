@@ -25,6 +25,9 @@ const commands = [
         .setName('skip')
         .setDescription('Skip the current track'),
     new SlashCommandBuilder()
+        .setName('previous')
+        .setDescription('Go back to the previous track'),
+    new SlashCommandBuilder()
         .setName('stop')
         .setDescription('Stop music and clear the queue'),
 ].map(command => command.toJSON());

@@ -39,7 +39,7 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
                 .setAuthor({ name: 'Track added to queue' })
                 .setTitle(result.track.title)
                 .setURL(result.track.url)
-                .setThumbnail(result.track.thumbnail)
+                .setThumbnail(result.track.bridgedTrack?.thumbnail || result.track.thumbnail)
                 .addFields(
                     { name: 'Artist', value: `\`${result.track.author}\``, inline: true },
                     { name: 'Duration', value: `\`${result.track.duration}\``, inline: true }

@@ -4,7 +4,8 @@ import { playCommand } from "./commands/play";
 import { pauseCommand } from "./commands/pause";
 import { skipCommand } from './commands/skip';
 import { stopCommand } from "./commands/stop";
-import { ActionRowBuilder, Client, GatewayIntentBits } from "discord.js";
+import { ActionRowBuilder, ButtonInteraction, Client, GatewayIntentBits } from "discord.js";
+import { previousCommand } from "./commands/previous";
 
 
 dotenv.config();
@@ -31,42 +32,33 @@ async function main() {
                 await interaction.deferReply();
                 await playCommand(interaction);
             }
-            if (interaction.commandName === 'pause') await pauseCommand(interaction);
-            if (interaction.commandName === 'skip') await skipCommand(interaction);
-            if (interaction.commandName === 'stop') await stopCommand(interaction);
+            
+            else {
+                await interaction.deferReply({ ephemeral: true });
+                await interaction.deleteReply();
+
+                if (interaction.commandName === 'previous') await previousCommand(interaction);
+                if (interaction.commandName === 'pause') await pauseCommand(interaction);
+                if (interaction.commandName === 'skip') await skipCommand(interaction);
+                if (interaction.commandName === 'stop') await stopCommand(interaction);
+            }
         }
 
         if (interaction.isButton()) {
-            const queue = player.nodes.get(interaction.guildId!);
-
-            if (!queue || !queue.isPlaying()) {
-                return interaction.reply({ content: 'The queue is empty or the music is not playing', ephemeral: true });
-            }
+            await interaction.deferUpdate();
 
             switch (interaction.customId) {
+                case 'previous':
+                    await previousCommand(interaction as ButtonInteraction);
+                    break;
                 case 'pause_resume':
-                    const isPaused = queue.node.isPaused();
-                    queue.node.setPaused(!isPaused);
-                    const rows = interaction.message.components.map(row => {
-                        const actionRow = ActionRowBuilder.from(row as any);
-                        actionRow.components.forEach((component: any) => {
-                            if (component.data.custom_id === 'pause_resume') {
-                                component.setLabel(isPaused ? '⏸' : '▶');
-                            }
-                        });
-                        return actionRow;
-                    });
-                    await interaction.update({ components: rows as any });
+                    await pauseCommand(interaction as ButtonInteraction);
                     break;
-
                 case 'skip':
-                    queue.node.skip();
-                    await interaction.deferUpdate();
+                    await skipCommand(interaction as ButtonInteraction);
                     break;
-
                 case 'stop':
-                    queue.delete();
-                    await interaction.message.delete().catch(() => { });
+                    await stopCommand(interaction as ButtonInteraction);
                     break;
             }
         }

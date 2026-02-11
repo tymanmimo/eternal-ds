@@ -1,8 +1,9 @@
 import { useQueue } from "discord-player";
 import { ChatInputCommandInteraction, ButtonInteraction } from "discord.js";
 
-export const skipCommand = async (interaction: ChatInputCommandInteraction | ButtonInteraction) => {
+export const previousCommand = async (interaction: ChatInputCommandInteraction | ButtonInteraction) => {
     const queue = useQueue(interaction.guildId!);
+
     if (!queue || !queue.isPlaying()) {
         if (interaction.isButton()) {
             return interaction.editReply({ content: 'Nothing is playing right now', embeds: [], components: [] });
@@ -10,5 +11,12 @@ export const skipCommand = async (interaction: ChatInputCommandInteraction | But
             return interaction.reply({ content: 'Nothing is playing right now', ephemeral: true });
         }
     }
-    queue.node.skip();
-};
+
+    const history = queue.history;
+
+    if (!history.previousTrack) {
+        return interaction.reply({ content: 'There is no previous track in the history.', ephemeral: true });
+    }
+
+    await history.back();
+}

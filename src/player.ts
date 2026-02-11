@@ -1,7 +1,7 @@
-import { Player } from 'discord-player';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Message, TextChannel } from 'discord.js';
-import { AppleMusicExtractor, AttachmentExtractor, SoundCloudExtractor, SpotifyExtractor } from '@discord-player/extractor';
 import ffmpegPath from 'ffmpeg-static';
+import { Player } from 'discord-player';
+import { DefaultExtractors } from '@discord-player/extractor';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Message, TextChannel } from 'discord.js';
 
 
 interface PlayerMetadata {
@@ -15,12 +15,8 @@ export const setupPlayer = async (client: Client) => {
         ffmpegPath: ffmpegPath as string,
     });
 
-    // await player.extractors.register(YoutubeiExtractor, {});
-    await player.extractors.register(SoundCloudExtractor, {});
-    await player.extractors.register(SpotifyExtractor, { bridge: true } as any);
-    await player.extractors.register(AppleMusicExtractor, { bridge: true } as any);
-    await player.extractors.register(AttachmentExtractor, {});
 
+    await player.extractors.loadMulti(DefaultExtractors);
 
     player.events.on('playerStart', async(queue, track) => {
         const metadata = queue.metadata as PlayerMetadata;
@@ -30,14 +26,14 @@ export const setupPlayer = async (client: Client) => {
             try {
                 await metadata.lastMessage.delete();
             } catch (error) {
-                console.error('Не удалось удалить старое сообщение плеера');
+                console.error('Failed to delete old player message');
             }
         }
 
         const embed = new EmbedBuilder()
             .setTitle(track.title.toUpperCase())
             .setURL(track.url)
-            .setThumbnail(track.thumbnail)
+            .setThumbnail(track.bridgedTrack?.thumbnail || track.thumbnail)
             .addFields(
                 {
                     name: 'Artist',
@@ -58,8 +54,12 @@ export const setupPlayer = async (client: Client) => {
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
+                .setCustomId('previous')
+                .setLabel('⏮')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
                 .setCustomId('pause_resume')
-                .setLabel('⏸')
+                .setLabel(queue.node.isPaused() ? '▶' : '⏸')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId('skip')
