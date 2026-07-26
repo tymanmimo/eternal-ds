@@ -1,5 +1,7 @@
 import { useMainPlayer } from 'discord-player';
 import { ChatInputCommandInteraction, EmbedBuilder, GuildMember } from 'discord.js';
+import { createSpotifyStream } from '../spotifyBridge';
+import { resolvePlayQuery } from '../playlistResolver';
 
 export const playCommand = async (interaction: ChatInputCommandInteraction) => {
     const player = useMainPlayer();
@@ -10,12 +12,14 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
     if (!channel) return interaction.editReply('First, go to the voice channel');
 
     try {
-        const result = await player.play(channel, query, {
+        const searchResult = await resolvePlayQuery(player, query, interaction.user);
+        const result = await player.play(channel, searchResult, {
             nodeOptions: {
                 metadata: { channel: interaction.channel },
                 leaveOnEnd: true,
                 leaveOnEmpty: true,
                 selfDeaf: true,
+                onBeforeCreateStream: track => createSpotifyStream(player, track),
             },
             requestedBy: interaction.user
         });

@@ -6,17 +6,24 @@ export const previousCommand = async (interaction: ChatInputCommandInteraction |
 
     if (!queue || !queue.isPlaying()) {
         if (interaction.isButton()) {
-            return interaction.editReply({ content: 'Nothing is playing right now', embeds: [], components: [] });
+            await interaction.followUp({ content: 'Nothing is playing right now', ephemeral: true });
         } else {
-            return interaction.reply({ content: 'Nothing is playing right now', ephemeral: true });
+            await interaction.editReply('Nothing is playing right now');
         }
+        return false;
     }
 
     const history = queue.history;
 
     if (!history.previousTrack) {
-        return interaction.reply({ content: 'There is no previous track in the history.', ephemeral: true });
+        if (interaction.isButton()) {
+            await interaction.followUp({ content: 'There is no previous track in the history.', ephemeral: true });
+        } else {
+            await interaction.editReply('There is no previous track in the history.');
+        }
+        return false;
     }
 
     await history.back();
+    return true;
 }

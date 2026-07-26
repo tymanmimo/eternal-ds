@@ -1,10 +1,13 @@
 import ffmpegPath from 'ffmpeg-static';
 import { Player } from 'discord-player';
 import { DefaultExtractors } from '@discord-player/extractor';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Message, TextChannel } from 'discord.js';
+import { YoutubeExtractor } from 'discord-player-youtubei';
+import { Client, EmbedBuilder, Message, TextChannel } from 'discord.js';
+import { createPlayerControls } from './playerControls';
+import { createYoutubeStream } from './youtubeStream';
 
 
-interface PlayerMetadata {
+export interface PlayerMetadata {
     channel: TextChannel;
     lastMessage?: Message;
 }
@@ -17,6 +20,9 @@ export const setupPlayer = async (client: Client) => {
 
 
     await player.extractors.loadMulti(DefaultExtractors);
+    await player.extractors.register(YoutubeExtractor, {
+        createStream: track => createYoutubeStream(track.url, track.live),
+    });
 
     player.events.on('playerStart', async(queue, track) => {
         const metadata = queue.metadata as PlayerMetadata;
@@ -25,7 +31,7 @@ export const setupPlayer = async (client: Client) => {
         if (metadata.lastMessage) {
             try {
                 await metadata.lastMessage.delete();
-            } catch (error) {
+            } catch {
                 console.error('Failed to delete old player message');
             }
         }
@@ -52,34 +58,21 @@ export const setupPlayer = async (client: Client) => {
                 iconURL: track.requestedBy?.displayAvatarURL()
             });
 
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-                .setCustomId('previous')
-                .setLabel('⏮')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('pause_resume')
-                .setLabel(queue.node.isPaused() ? '▶' : '⏸')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('skip')
-                .setLabel('⏭')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId('stop')
-                .setLabel('⊘')
-                .setStyle(ButtonStyle.Danger)
-        );
+        const row = createPlayerControls(queue);
 
         const message = await metadata.channel.send({ embeds: [embed], components: [row] });
         metadata.lastMessage = message;
     });
 
-    player.events.on('playerError', (queue, error) => {
-        console.error(`[Player Error] ${error.message}`);
+    player.events.on('playerError', (_queue, error, track) => {
+        console.error(`[Player Error] ${track.title}: ${error.message}`);
     });
 
-    player.events.on('error', (queue, error) => {
+    player.events.on('playerSkip', (_queue, track, reason, description) => {
+        console.warn(`[Player Skip] ${track.title} (${reason}): ${description}`);
+    });
+
+    player.events.on('error', (_queue, error) => {
         console.error(`[Queue Error] ${error.message}`);
     });
 
