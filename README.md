@@ -1,6 +1,6 @@
 # Eternal DS - Discord Music Bot
 
-<img src="assets/preview.png" alt="Eternal DS Preview" style="border-radius: 16px; margin-bottom: 12px;">
+![Eternal DS Preview](assets/preview.png)
 
 Eternal DS is a Discord music bot built with TypeScript, discord.js v14,
 and discord-player v7. It supports slash commands and interactive
