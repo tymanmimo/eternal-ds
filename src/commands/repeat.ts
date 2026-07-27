@@ -1,25 +1,14 @@
 import { QueueRepeatMode, useQueue } from 'discord-player';
-import { ButtonInteraction, ChatInputCommandInteraction } from 'discord.js';
+import type { PlayerCommandResult } from './playerCommandResult';
 
-export const repeatCommand = async (interaction: ChatInputCommandInteraction | ButtonInteraction) => {
-    const queue = useQueue(interaction.guildId!);
+export const repeatCommand = (guildId: string): PlayerCommandResult => {
+    const queue = useQueue(guildId);
 
     if (!queue?.currentTrack) {
-        if (interaction.isButton()) {
-            await interaction.followUp({ content: 'Nothing is playing right now', ephemeral: true });
-        } else {
-            await interaction.editReply('Nothing is playing right now');
-        }
-        return false;
+        return { ok: false, message: 'Nothing is playing right now' };
     }
 
     const enabled = queue.repeatMode !== QueueRepeatMode.TRACK;
     queue.setRepeatMode(enabled ? QueueRepeatMode.TRACK : QueueRepeatMode.OFF);
-
-    if (interaction.isButton()) {
-        return true;
-    }
-
-    await interaction.editReply(`Current track repeat ${enabled ? 'enabled' : 'disabled'}`);
-    return true;
+    return { ok: true, message: `Current track repeat ${enabled ? 'enabled' : 'disabled'}` };
 };

@@ -131,15 +131,16 @@ export const resolvePlayQuery = async (player: Player, query: string, requestedB
 
     const result = await player.search(query, { requestedBy });
     if (result.playlist?.source === 'spotify') {
-        const thumbnail = await getSpotifyThumbnail(query);
-        if (thumbnail) {
-            result.playlist.thumbnail = thumbnail;
-            for (const track of result.playlist.tracks) {
-                if (!track.thumbnail || track.thumbnail === defaultSpotifyThumbnail) {
-                    track.thumbnail = thumbnail;
+        void getSpotifyThumbnail(query).then(thumbnail => {
+            if (thumbnail && result.playlist) {
+                result.playlist.thumbnail = thumbnail;
+                for (const track of result.playlist.tracks) {
+                    if (!track.thumbnail || track.thumbnail === defaultSpotifyThumbnail) {
+                        track.thumbnail = thumbnail;
+                    }
                 }
             }
-        }
+        });
     }
     return result;
 };

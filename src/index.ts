@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
-import { setTimeout as delay } from "node:timers/promises";
-import { setupPlayer, type PlayerMetadata } from "./player";
+import { setupPlayer } from "./player";
 import { playCommand } from "./commands/play";
 import { pauseCommand } from "./commands/pause";
 import { skipCommand } from './commands/skip';
@@ -10,6 +9,8 @@ import { previousCommand } from "./commands/previous";
 import { repeatCommand } from "./commands/repeat";
 import { startYoutubeDlUpdater } from "./youtubeStream";
 import { createPlayerControls } from "./playerControls";
+import type { PlayerCommandResult } from "./commands/playerCommandResult";
+import { logTiming } from "./performance";
 
 
 dotenv.config();
@@ -32,30 +33,50 @@ async function main() {
 
     client.on('interactionCreate', async (interaction) => {
         if (interaction.isChatInputCommand()) {
-            if (interaction.commandName === 'play') {
-                await interaction.deferReply();
-                await playCommand(interaction);
-            }
+            try {
+                const guildId = interaction.guildId;
+                if (!guildId) {
+                    await interaction.reply({ content: 'This command is only available in a server', ephemeral: true });
+                    return;
+                }
 
-            else if (interaction.commandName === 'repeat') {
-                await interaction.deferReply({ ephemeral: true });
-                await repeatCommand(interaction);
-            }
-            
-            else {
-                await interaction.deferReply({ ephemeral: true });
-                let succeeded = false;
+                if (interaction.commandName === 'play') {
+                    await interaction.deferReply();
+                    await playCommand(interaction);
+                    return;
+                }
 
-                if (interaction.commandName === 'previous') succeeded = await previousCommand(interaction);
-                if (interaction.commandName === 'pause') succeeded = await pauseCommand(interaction);
-                if (interaction.commandName === 'skip') succeeded = await skipCommand(interaction);
-                if (interaction.commandName === 'stop') succeeded = await stopCommand(interaction);
+                if (interaction.commandName === 'previous') {
+                    await interaction.deferReply({ ephemeral: true });
+                    const result = await previousCommand(guildId);
+                    await interaction.editReply(result.message);
+                    return;
+                }
 
-                if (succeeded) await interaction.deleteReply();
+                let result: PlayerCommandResult | undefined;
+                if (interaction.commandName === 'pause') result = pauseCommand(guildId);
+                if (interaction.commandName === 'repeat') result = repeatCommand(guildId);
+                if (interaction.commandName === 'skip') result = skipCommand(guildId);
+                if (interaction.commandName === 'stop') result = stopCommand(guildId);
+
+                if (result) {
+                    await interaction.reply({ content: result.message, ephemeral: true });
+                }
+            } catch (error) {
+                console.error(`[Command Error] ${interaction.commandName}:`, error);
+                const message = 'Unable to process this command';
+                if (interaction.deferred) await interaction.editReply(message).catch(() => undefined);
+                else if (interaction.replied) {
+                    await interaction.followUp({ content: message, ephemeral: true }).catch(() => undefined);
+                } else {
+                    await interaction.reply({ content: message, ephemeral: true }).catch(() => undefined);
+                }
             }
+            return;
         }
 
         if (interaction.isButton()) {
+            const interactionStartedAt = performance.now();
             const guildId = interaction.guildId;
             if (!guildId) {
                 await interaction.deferUpdate();
@@ -68,7 +89,6 @@ async function main() {
             }
 
             activeButtonGuilds.add(guildId);
-            const messageId = interaction.message.id;
 
             try {
                 const queue = player.nodes.get(guildId);
@@ -77,48 +97,53 @@ async function main() {
                     return;
                 }
 
-                await interaction.update({ components: [createPlayerControls(queue, true)] });
-
-                let trackTransitionStarted = false;
+                let result: PlayerCommandResult;
                 switch (interaction.customId) {
                     case 'previous':
-                        trackTransitionStarted = await previousCommand(interaction);
+                        await interaction.deferUpdate();
+                        result = await previousCommand(guildId);
                         break;
                     case 'pause_resume':
-                        await pauseCommand(interaction);
+                        result = pauseCommand(guildId);
                         break;
                     case 'repeat_track':
-                        await repeatCommand(interaction);
+                        result = repeatCommand(guildId);
                         break;
                     case 'skip':
-                        trackTransitionStarted = await skipCommand(interaction);
+                        await interaction.deferUpdate();
+                        result = skipCommand(guildId);
                         break;
                     case 'stop':
-                        await stopCommand(interaction);
+                        await interaction.deferUpdate();
+                        result = stopCommand(guildId);
                         break;
+                    default:
+                        await interaction.deferUpdate();
+                        return;
                 }
 
-                if (trackTransitionStarted) {
-                    const timeoutAt = Date.now() + 60_000;
-                    while (Date.now() < timeoutAt) {
-                        const currentQueue = player.nodes.get(guildId);
-                        const metadata = currentQueue?.metadata as PlayerMetadata | undefined;
-                        if (!currentQueue?.currentTrack || metadata?.lastMessage?.id !== messageId) break;
-                        await delay(250);
-                    }
+                if (!result.ok) {
+                    const response = { content: result.message, ephemeral: true } as const;
+                    if (interaction.deferred || interaction.replied) await interaction.followUp(response);
+                    else await interaction.reply(response);
+                    return;
+                }
+
+                const currentQueue = player.nodes.get(guildId);
+                if (!interaction.deferred && !interaction.replied && currentQueue?.currentTrack) {
+                    await interaction.update({ components: [createPlayerControls(currentQueue)] });
                 }
             } catch (error) {
                 console.error(`[Button Error] ${interaction.customId}:`, error);
-            } finally {
-                const queue = player.nodes.get(guildId);
-                const metadata = queue?.metadata as PlayerMetadata | undefined;
-
-                if (metadata?.lastMessage?.id === messageId) {
-                    await interaction.editReply({
-                        components: queue?.currentTrack ? [createPlayerControls(queue)] : [],
-                    }).catch(() => undefined);
+                const response = { content: 'Unable to process this control', ephemeral: true } as const;
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.followUp(response).catch(() => undefined);
+                } else {
+                    await interaction.reply(response).catch(() => undefined);
                 }
+            } finally {
                 activeButtonGuilds.delete(guildId);
+                logTiming(`button.${interaction.customId}`, interactionStartedAt);
             }
         }
     });

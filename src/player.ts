@@ -28,14 +28,6 @@ export const setupPlayer = async (client: Client) => {
         const metadata = queue.metadata as PlayerMetadata;
         if (!metadata?.channel) return;
 
-        if (metadata.lastMessage) {
-            try {
-                await metadata.lastMessage.delete();
-            } catch {
-                console.error('Failed to delete old player message');
-            }
-        }
-
         const embed = new EmbedBuilder()
             .setTitle(track.title.toUpperCase())
             .setURL(track.url)
@@ -57,10 +49,18 @@ export const setupPlayer = async (client: Client) => {
                 text: `Ordered by ${track.requestedBy?.username}`,
                 iconURL: track.requestedBy?.displayAvatarURL()
             });
-
         const row = createPlayerControls(queue);
+        const messagePayload = { embeds: [embed], components: [row] };
+        if (metadata.lastMessage) {
+            try {
+                await metadata.lastMessage.edit(messagePayload);
+                return;
+            } catch {
+                metadata.lastMessage = undefined;
+            }
+        }
 
-        const message = await metadata.channel.send({ embeds: [embed], components: [row] });
+        const message = await metadata.channel.send(messagePayload);
         metadata.lastMessage = message;
     });
 
@@ -70,6 +70,11 @@ export const setupPlayer = async (client: Client) => {
 
     player.events.on('playerSkip', (_queue, track, reason, description) => {
         console.warn(`[Player Skip] ${track.title} (${reason}): ${description}`);
+    });
+
+    player.events.on('emptyQueue', async queue => {
+        const metadata = queue.metadata as PlayerMetadata;
+        await metadata?.lastMessage?.edit({ components: [] }).catch(() => undefined);
     });
 
     player.events.on('error', (_queue, error) => {

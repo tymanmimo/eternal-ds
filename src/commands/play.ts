@@ -2,6 +2,7 @@ import { useMainPlayer } from 'discord-player';
 import { ChatInputCommandInteraction, EmbedBuilder, GuildMember } from 'discord.js';
 import { createSpotifyStream } from '../spotifyBridge';
 import { resolvePlayQuery } from '../playlistResolver';
+import { logTiming } from '../performance';
 
 export const playCommand = async (interaction: ChatInputCommandInteraction) => {
     const player = useMainPlayer();
@@ -11,8 +12,13 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
 
     if (!channel) return interaction.editReply('First, go to the voice channel');
 
+    const commandStartedAt = performance.now();
     try {
+        const searchStartedAt = performance.now();
         const searchResult = await resolvePlayQuery(player, query, interaction.user);
+        logTiming('play.search', searchStartedAt);
+
+        const playerStartedAt = performance.now();
         const result = await player.play(channel, searchResult, {
             nodeOptions: {
                 metadata: { channel: interaction.channel },
@@ -23,6 +29,7 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
             },
             requestedBy: interaction.user
         });
+        logTiming('play.enqueue', playerStartedAt);
 
         const embed = new EmbedBuilder().setColor('#a600ff');
         const playlist = result.searchResult.playlist;
@@ -51,10 +58,13 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
                 .setFooter({ text: `Requested by ${interaction.user.username}` });
         }
 
-        return interaction.editReply({ embeds: [embed] });
+        const response = await interaction.editReply({ embeds: [embed] });
+        logTiming('play.command', commandStartedAt);
+        return response;
 
     } catch (e) {
         console.error(e);
+        logTiming('play.command', commandStartedAt, 'failed');
         return interaction.editReply('Could not find track or playlist...');
     }
 };

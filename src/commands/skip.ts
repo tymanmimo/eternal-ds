@@ -1,19 +1,17 @@
 import { QueueRepeatMode, useQueue } from "discord-player";
-import { ChatInputCommandInteraction, ButtonInteraction } from "discord.js";
+import type { PlayerCommandResult } from "./playerCommandResult";
 
-export const skipCommand = async (interaction: ChatInputCommandInteraction | ButtonInteraction) => {
-    const queue = useQueue(interaction.guildId!);
-    if (!queue || !queue.isPlaying()) {
-        if (interaction.isButton()) {
-            await interaction.followUp({ content: 'Nothing is playing right now', ephemeral: true });
-        } else {
-            await interaction.editReply('Nothing is playing right now');
-        }
-        return false;
+export const skipCommand = (guildId: string): PlayerCommandResult => {
+    const queue = useQueue(guildId);
+    if (!queue?.currentTrack) {
+        return { ok: false, message: 'Nothing is playing right now' };
     }
+
     if (queue.repeatMode === QueueRepeatMode.TRACK) {
         queue.setRepeatMode(QueueRepeatMode.OFF);
     }
-    queue.node.skip();
-    return true;
+    if (!queue.node.skip()) {
+        return { ok: false, message: 'Unable to skip the current track' };
+    }
+    return { ok: true, message: 'Track skipped' };
 };

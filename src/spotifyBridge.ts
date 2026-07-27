@@ -2,6 +2,15 @@ import { Readable } from 'node:stream';
 import { Player, Track } from 'discord-player';
 import { YoutubeExtractor } from 'discord-player-youtubei';
 import { createYoutubeStream } from './youtubeStream';
+import { logTiming } from './performance';
+
+interface CachedSpotifyMatch {
+    candidate: Track;
+    expiresAt: number;
+}
+
+const spotifyMatchCache = new Map<string, CachedSpotifyMatch>();
+const spotifyMatchCacheTtl = 6 * 60 * 60 * 1000;
 
 const variantTokens = new Set([
     'acoustic',
@@ -52,27 +61,58 @@ const getMatchScore = (spotifyTrack: Track, youtubeTrack: Track) => {
     return titleCoverage * 0.55 + artistCoverage * 0.3 + durationScore * 0.15;
 };
 
+const getSpotifyMatchKey = (track: Track) => {
+    return `${track.author}\u0000${track.title}\u0000${track.durationMS}`.toLocaleLowerCase('en-US');
+};
+
 export const createSpotifyStream = async (
     player: Player,
     track: Track,
 ): Promise<Readable | null> => {
     if (track.source !== 'spotify') return null;
 
+    const matchKey = getSpotifyMatchKey(track);
+    const cachedMatch = spotifyMatchCache.get(matchKey);
+    if (cachedMatch && cachedMatch.expiresAt <= Date.now()) {
+        spotifyMatchCache.delete(matchKey);
+    }
+    if (cachedMatch && cachedMatch.expiresAt > Date.now()) {
+        try {
+            const stream = await createYoutubeStream(cachedMatch.candidate.url, cachedMatch.candidate.live);
+            track.bridgedTrack = cachedMatch.candidate;
+            track.bridgedExtractor = cachedMatch.candidate.extractor;
+            return stream;
+        } catch {
+            spotifyMatchCache.delete(matchKey);
+        }
+    }
+
+    const searchStartedAt = performance.now();
     const result = await player.search(`${track.author} - ${track.title} official audio`, {
         searchEngine: `ext:${YoutubeExtractor.identifier}`,
         requestedBy: track.requestedBy ?? undefined,
     });
+    logTiming('spotify.youtubeSearch', searchStartedAt);
 
     const candidates = result.tracks
         .map(candidate => ({ candidate, score: getMatchScore(track, candidate) }))
         .filter((entry): entry is { candidate: Track; score: number } => entry.score !== null)
-        .sort((left, right) => right.score - left.score);
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 3);
 
     for (const { candidate } of candidates) {
         try {
             const stream = await createYoutubeStream(candidate.url, candidate.live);
             track.bridgedTrack = candidate;
             track.bridgedExtractor = candidate.extractor;
+            if (spotifyMatchCache.size >= 500) {
+                const oldestKey = spotifyMatchCache.keys().next().value;
+                if (oldestKey) spotifyMatchCache.delete(oldestKey);
+            }
+            spotifyMatchCache.set(matchKey, {
+                candidate,
+                expiresAt: Date.now() + spotifyMatchCacheTtl,
+            });
             return stream;
         } catch {
             continue;

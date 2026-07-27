@@ -1,29 +1,19 @@
 import { useQueue } from "discord-player";
-import { ChatInputCommandInteraction, ButtonInteraction } from "discord.js";
+import type { PlayerCommandResult } from "./playerCommandResult";
 
-export const previousCommand = async (interaction: ChatInputCommandInteraction | ButtonInteraction) => {
-    const queue = useQueue(interaction.guildId!);
+export const previousCommand = async (guildId: string): Promise<PlayerCommandResult> => {
+    const queue = useQueue(guildId);
 
-    if (!queue || !queue.isPlaying()) {
-        if (interaction.isButton()) {
-            await interaction.followUp({ content: 'Nothing is playing right now', ephemeral: true });
-        } else {
-            await interaction.editReply('Nothing is playing right now');
-        }
-        return false;
+    if (!queue?.currentTrack) {
+        return { ok: false, message: 'Nothing is playing right now' };
     }
 
     const history = queue.history;
 
     if (!history.previousTrack) {
-        if (interaction.isButton()) {
-            await interaction.followUp({ content: 'There is no previous track in the history.', ephemeral: true });
-        } else {
-            await interaction.editReply('There is no previous track in the history.');
-        }
-        return false;
+        return { ok: false, message: 'There is no previous track in the history.' };
     }
 
     await history.back();
-    return true;
+    return { ok: true, message: 'Playing the previous track' };
 }

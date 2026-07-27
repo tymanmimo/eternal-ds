@@ -17,7 +17,7 @@ message buttons for controlling music playback in voice channels.
 -   Repeat the current track indefinitely
 -   Stop playback and clear queue
 -   Interactive control buttons under the now playing message
--   Automatic deletion of previous player message
+-   Reusable now playing message with low-latency controls
 -   FFmpeg bundled via ffmpeg-static
 
 ## Tech Stack
@@ -72,7 +72,12 @@ CLIENT_ID=YOUR_APPLICATION_CLIENT_ID
 
 YOUTUBE_PROXY=
 YOUTUBE_DL_AUTO_UPDATE=true
-YOUTUBE_STREAM_RETRIES=3
+YOUTUBE_STREAM_RETRIES=2
+YOUTUBE_PREBUFFER_KB=128
+YOUTUBE_STARTUP_TIMEOUT_MS=12000
+YOUTUBE_TOTAL_TIMEOUT_MS=25000
+YOUTUBE_PLAYLIST_TIMEOUT_MS=30000
+PERFORMANCE_LOGGING=true
 ```
 
 ### How to get these values
@@ -83,13 +88,23 @@ YOUTUBE_STREAM_RETRIES=3
 -   YOUTUBE_PROXY -- optional proxy URL used for YouTube extraction and media.
 -   YOUTUBE_DL_AUTO_UPDATE -- check for a yt-dlp update at most once every 24
     hours. If the update service is unavailable, the installed binary is kept.
--   YOUTUBE_STREAM_RETRIES -- stream extraction attempts from `1` to `10`.
+-   YOUTUBE_STREAM_RETRIES -- stream startup attempts from `1` to `5`.
+-   YOUTUBE_PREBUFFER_KB -- audio buffered before FFmpeg starts, from `16` to
+    `1024` KiB. `128` is recommended for local playback.
+-   YOUTUBE_STARTUP_TIMEOUT_MS -- maximum wait for the first buffered audio in
+    one attempt, from `3000` to `30000` milliseconds.
+-   YOUTUBE_TOTAL_TIMEOUT_MS -- total stream startup deadline, from `5000` to
+    `60000` milliseconds.
+-   YOUTUBE_PLAYLIST_TIMEOUT_MS -- metadata deadline for one YouTube playlist
+    attempt, from `5000` to `60000` milliseconds.
+-   PERFORMANCE_LOGGING -- print command, resolver, and stream startup timings.
 
 ## YouTube Playback
 
 YouTube playback is fully anonymous and does not require an account, browser,
 cookie, API key, or OAuth token. yt-dlp uses Node.js to process YouTube's player
-challenge, retries temporary failures, and is updated automatically by default.
+challenge and streams audio directly to FFmpeg with a small startup buffer. It
+retries temporary startup failures and is updated automatically by default.
 Private, members-only, and some age-restricted videos are not available
 anonymously.
 
@@ -140,6 +155,7 @@ npm start
 
 Make sure your bot has:
 
+-   View Channels
 -   Send Messages
 -   Embed Links
 -   Connect
