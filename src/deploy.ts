@@ -1,5 +1,6 @@
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
+import { commandDefinitions } from './bot/commandDefinitions';
 
 dotenv.config();
 
@@ -10,38 +11,13 @@ if (!TOKEN || !CLIENT_ID) {
     process.exit(1);
 }
 
-const commands = [
-    new SlashCommandBuilder()
-        .setName('play')
-        .setDescription('Play music')
-        .addStringOption(option =>
-            option.setName('query')
-                .setDescription('Song name or link')
-                .setRequired(true)),
-    new SlashCommandBuilder()
-        .setName('pause')
-        .setDescription('Pause or resume playback'),
-    new SlashCommandBuilder()
-        .setName('skip')
-        .setDescription('Skip the current track'),
-    new SlashCommandBuilder()
-        .setName('previous')
-        .setDescription('Go back to the previous track'),
-    new SlashCommandBuilder()
-        .setName('repeat')
-        .setDescription('Toggle repeat for the current track'),
-    new SlashCommandBuilder()
-        .setName('stop')
-        .setDescription('Stop music and clear the queue'),
-].map(command => command.toJSON());
-
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
     try {
         await rest.put(
             Routes.applicationCommands(CLIENT_ID),
-            { body: commands },
+            { body: commandDefinitions },
         );
         console.log('Successfully reloaded global slash commands');
     } catch (error) {

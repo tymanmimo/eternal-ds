@@ -1,7 +1,7 @@
 import { useMainPlayer } from 'discord-player';
 import { ChatInputCommandInteraction, EmbedBuilder, GuildMember } from 'discord.js';
-import { createSpotifyStream } from '../spotifyBridge';
-import { resolvePlayQuery } from '../playlistResolver';
+import { resolvePlayQuery } from '../media/resolvePlayQuery';
+import { createSpotifyStream } from '../media/spotify/bridge';
 import { logTiming } from '../performance';
 
 export const playCommand = async (interaction: ChatInputCommandInteraction) => {
@@ -27,7 +27,7 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
                 selfDeaf: true,
                 onBeforeCreateStream: track => createSpotifyStream(player, track),
             },
-            requestedBy: interaction.user
+            requestedBy: interaction.user,
         });
         logTiming('play.enqueue', playerStartedAt);
 
@@ -35,14 +35,15 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
         const playlist = result.searchResult.playlist;
 
         if (playlist) {
+            const isSpotify = playlist.source === 'spotify';
             embed
                 .setAuthor({ name: 'Playlist added to queue' })
                 .setTitle(playlist.title)
                 .setURL(playlist.url)
-                .setThumbnail(playlist.thumbnail)
+                .setThumbnail(isSpotify ? (playlist.tracks[0] ? playlist.tracks[0].thumbnail : playlist.thumbnail) : playlist.thumbnail)
                 .addFields(
                     { name: 'Tracks', value: `\`${playlist.tracks.length}\``, inline: true },
-                    { name: 'Author', value: `\`${playlist.author.name}\``, inline: true }
+                    { name: 'Author', value: `\`${playlist.author.name}\``, inline: true },
                 )
                 .setFooter({ text: `Requested by ${interaction.user.username}` });
         } else {
@@ -53,7 +54,7 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
                 .setThumbnail(result.track.bridgedTrack?.thumbnail || result.track.thumbnail)
                 .addFields(
                     { name: 'Artist', value: `\`${result.track.author}\``, inline: true },
-                    { name: 'Duration', value: `\`${result.track.duration}\``, inline: true }
+                    { name: 'Duration', value: `\`${result.track.duration}\``, inline: true },
                 )
                 .setFooter({ text: `Requested by ${interaction.user.username}` });
         }
@@ -61,9 +62,8 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
         const response = await interaction.editReply({ embeds: [embed] });
         logTiming('play.command', commandStartedAt);
         return response;
-
-    } catch (e) {
-        console.error(e);
+    } catch (error) {
+        console.error(error);
         logTiming('play.command', commandStartedAt, 'failed');
         return interaction.editReply('Could not find track or playlist...');
     }

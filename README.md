@@ -33,6 +33,11 @@ message buttons for controlling music playback in voice channels.
 -   yt-dlp playback via youtube-dl-exec
 -   ffmpeg-static
 
+## Prerequisites
+
+-   Node.js 22.19.0 or newer
+-   A Discord application with a bot user
+
 ## Installation
 
 ### 1. Clone the repository
@@ -50,7 +55,12 @@ npm install
 
 `youtube-dl-exec` checks for Python during installation even though it downloads
 a standalone binary. If Python 3.9+ is not installed, set
-`YOUTUBE_DL_SKIP_PYTHON_CHECK=1` before running `npm install`:
+`YOUTUBE_DL_SKIP_PYTHON_CHECK=1` in the installation shell before running
+`npm install`. This is an install-time variable, not a value loaded from `.env`.
+
+``` bash
+YOUTUBE_DL_SKIP_PYTHON_CHECK=1 npm install
+```
 
 ``` powershell
 $env:YOUTUBE_DL_SKIP_PYTHON_CHECK = "1"
@@ -82,13 +92,15 @@ PERFORMANCE_LOGGING=true
 
 ### How to get these values
 
--   TOKEN -- Discord Developer Portal → Bot → Reset Token
--   CLIENT_ID -- Discord Developer Portal → General Information →
-    Application ID
+-   TOKEN -- Discord Developer Portal → Bot → Reset Token. Required to run the
+    bot and deploy commands.
+-   CLIENT_ID -- Discord Developer Portal → General Information → Application
+    ID. Required only by the command deployment script.
 -   YOUTUBE_PROXY -- optional proxy URL used for YouTube extraction and media.
 -   YOUTUBE_DL_AUTO_UPDATE -- check for a yt-dlp update at most once every 24
     hours. If the update service is unavailable, the installed binary is kept.
--   YOUTUBE_STREAM_RETRIES -- stream startup attempts from `1` to `5`.
+-   YOUTUBE_STREAM_RETRIES -- attempts for both YouTube stream startup and
+    playlist metadata resolution, clamped from `1` to `5`.
 -   YOUTUBE_PREBUFFER_KB -- audio buffered before FFmpeg starts, from `16` to
     `1024` KiB. `128` is recommended for local playback.
 -   YOUTUBE_STARTUP_TIMEOUT_MS -- maximum wait for the first buffered audio in
@@ -98,6 +110,27 @@ PERFORMANCE_LOGGING=true
 -   YOUTUBE_PLAYLIST_TIMEOUT_MS -- metadata deadline for one YouTube playlist
     attempt, from `5000` to `60000` milliseconds.
 -   PERFORMANCE_LOGGING -- print command, resolver, and stream startup timings.
+    Set it to `0` or `false` to disable timing logs.
+
+## Install the Discord Application
+
+In the [Discord Developer Portal](https://discord.com/developers/applications),
+open the application and configure a **Guild Install**. Use the `bot` and
+`applications.commands` scopes, then authorize the generated installation URL
+for the target server.
+
+Grant the bot these permissions in the command text channel and target voice
+channel:
+
+-   View Channels
+-   Send Messages
+-   Embed Links
+-   Connect
+-   Speak
+
+Server members must also have permission to use application commands. The bot
+does not require Administrator, Manage Messages, Message Content, or any other
+privileged gateway intent.
 
 ## YouTube Playback
 
@@ -108,15 +141,26 @@ retries temporary startup failures and is updated automatically by default.
 Private, members-only, and some age-restricted videos are not available
 anonymously.
 
+When the update marker is stale, the first yt-dlp update attempt starts five
+minutes after the bot launches and is deferred while YouTube streams are active.
+A successful update writes `.data/yt-dlp-update-check` under the process working
+directory, so that location must be writable. Update failures are nonfatal and
+keep the installed binary. Set `YOUTUBE_DL_AUTO_UPDATE` to `0` or `false` to
+disable automatic updates.
+
 ## Register Slash Commands
 
-Before starting the bot, deploy slash commands:
+Register commands during initial setup and run the deployment again whenever
+the definitions in `src/bot/commandDefinitions.ts` change:
 
 ``` bash
 npm run deploy
 ```
 
-This registers global slash commands.
+This bulk-overwrites the Discord application's complete global command set with
+the commands defined by this project. Do not run it against an application whose
+other global commands are managed elsewhere. Discord clients can briefly show
+cached command definitions after an update.
 
 ## Development
 
@@ -142,29 +186,36 @@ npm start
 
 ## Available Commands
 
-  Command       Description
-  ------------- -----------------------------------
-  `/play`  -  Play music by name or URL<br>
-  `/pause`  -  Pause or resume playback<br>
-  `/skip`  -  Skip current track<br>
-  `/previous`  -  Play previous track<br>
-  `/repeat`  -  Toggle repeat for the current track<br>
-  `/stop`  -  Stop playback and clear the queue
+Commands are available only on servers. Join the target voice channel before
+using `/play`.
 
-## Required Bot Permissions
+| Command | Description |
+| --- | --- |
+| `/play` | Play music by name or URL |
+| `/pause` | Pause or resume playback |
+| `/skip` | Skip the current track |
+| `/previous` | Play the previous track |
+| `/repeat` | Toggle repeat for the current track |
+| `/stop` | Stop playback and clear the queue |
 
-Make sure your bot has:
+## Project Structure
 
--   View Channels
--   Send Messages
--   Embed Links
--   Connect
--   Speak
--   Use Slash Commands
+```text
+src/
+├── bot/          # Slash command definitions and Discord interactions
+├── media/
+│   ├── spotify/  # Spotify matching, bridging, and playlist artwork
+│   └── youtube/  # yt-dlp streams, playlists, runtime state, and updater
+├── player/       # Player setup, queue actions, controls, and messages
+├── deploy.ts     # Global command deployment
+├── index.ts      # Runtime entry point
+└── performance.ts
+```
+
+The `bot`, `media`, and `player` directories are feature boundaries. YouTube
+runtime coordination is internal to `src/media/youtube`.
 
 ## Notes
 
 -   FFmpeg is automatically provided via ffmpeg-static.
 -   YouTube account credentials and cookies are not used.
--   Global slash commands may take up to 1 hour to update.
--   Node.js 22.19.0 or newer is required.
