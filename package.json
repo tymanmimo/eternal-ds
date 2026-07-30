@@ -1,23 +1,38 @@
 {
     "name": "eternal-ds",
     "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
+    "private": true,
+    "description": "A self-hosted Discord music bot built with TypeScript, discord.js, and discord-player.",
+    "main": "dist/index.js",
     "scripts": {
         "dev": "nodemon src/index.ts",
         "deploy": "ts-node src/deploy.ts",
         "build": "tsc",
         "start": "node dist/index.js"
     },
-    "keywords": [],
-    "author": "",
+    "keywords": [
+        "discord",
+        "discord-bot",
+        "discord-player",
+        "music-bot",
+        "typescript"
+    ],
+    "author": "tymanmimo",
     "license": "ISC",
     "type": "commonjs",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/tymanmimo/eternal-ds.git"
+    },
+    "bugs": {
+        "url": "https://github.com/tymanmimo/eternal-ds/issues"
+    },
+    "homepage": "https://github.com/tymanmimo/eternal-ds#readme",
     "engines": {
         "node": ">=22.19.0"
     },
     "devDependencies": {
-        "@types/node": "^26.1.1",
+        "@types/node": "~22.19.0",
         "nodemon": "^3.1.14",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3"
