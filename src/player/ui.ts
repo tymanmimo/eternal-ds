@@ -58,11 +58,13 @@ export const handlePlayerStart = async (queue: GuildQueue, track: Track) => {
             { name: 'Artist', value: `\`${track.author}\``, inline: true },
             { name: 'Duration', value: `\`${track.duration}\``, inline: true },
         )
-        .setColor('#a600ff')
-        .setFooter({
+        .setColor('#a600ff');
+    if (track.requestedBy?.username) {
+        embed.setFooter({
             text: `Ordered by ${track.requestedBy?.username}`,
             iconURL: track.requestedBy?.displayAvatarURL(),
         });
+    }
     const messagePayload = { embeds: [embed], components: [createPlayerControls(queue)] };
 
     if (metadata.lastMessage) {

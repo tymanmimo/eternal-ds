@@ -5,10 +5,14 @@
     "description": "A self-hosted Discord music bot built with TypeScript, discord.js, and discord-player.",
     "main": "dist/index.js",
     "scripts": {
+        "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
         "dev": "nodemon src/index.ts",
         "deploy": "ts-node src/deploy.ts",
-        "build": "tsc",
-        "start": "node dist/index.js"
+        "typecheck": "tsc --noEmit",
+        "build": "npm run clean && tsc",
+        "start": "node dist/index.js",
+        "test": "npm run build && node --test --test-concurrency=1 \"test/**/*.test.js\"",
+        "test:coverage": "npm run build && node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test-coverage-exclude=\"dist/index.js\" --test-coverage-exclude=\"dist/deploy.js\" --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=75 \"test/**/*.test.js\""
     },
     "keywords": [
         "discord",

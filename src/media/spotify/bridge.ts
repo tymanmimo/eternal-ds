@@ -17,53 +17,63 @@ const getSpotifyMatchKey = (track: Track) => {
     return `${track.author}\u0000${track.title}\u0000${track.durationMS}`.toLocaleLowerCase('en-US');
 };
 
-export const createSpotifyStream = async (
+export interface SpotifyBridgeDependencies {
+    cache: Map<string, CachedSpotifyMatch>;
+    cacheTtl: number;
+    now: () => number;
+    createStream: typeof createYoutubeStream;
+    getMatchScore: typeof getSpotifyMatchScore;
+    logTiming: typeof logTiming;
+    timingNow?: () => number;
+}
+
+export const createSpotifyBridge = (dependencies: SpotifyBridgeDependencies) => async (
     player: Player,
     track: Track,
 ): Promise<Readable | null> => {
     if (track.source !== 'spotify') return null;
 
     const matchKey = getSpotifyMatchKey(track);
-    const cachedMatch = spotifyMatchCache.get(matchKey);
-    if (cachedMatch && cachedMatch.expiresAt <= Date.now()) {
-        spotifyMatchCache.delete(matchKey);
+    const cachedMatch = dependencies.cache.get(matchKey);
+    if (cachedMatch && cachedMatch.expiresAt <= dependencies.now()) {
+        dependencies.cache.delete(matchKey);
     }
-    if (cachedMatch && cachedMatch.expiresAt > Date.now()) {
+    if (cachedMatch && cachedMatch.expiresAt > dependencies.now()) {
         try {
-            const stream = await createYoutubeStream(cachedMatch.candidate.url, cachedMatch.candidate.live);
+            const stream = await dependencies.createStream(cachedMatch.candidate.url, cachedMatch.candidate.live);
             track.bridgedTrack = cachedMatch.candidate;
             track.bridgedExtractor = cachedMatch.candidate.extractor;
             return stream;
         } catch {
-            spotifyMatchCache.delete(matchKey);
+            dependencies.cache.delete(matchKey);
         }
     }
 
-    const searchStartedAt = performance.now();
+    const searchStartedAt = (dependencies.timingNow ?? dependencies.now)();
     const result = await player.search(`${track.author} - ${track.title} official audio`, {
         searchEngine: `ext:${YoutubeExtractor.identifier}`,
         requestedBy: track.requestedBy ?? undefined,
     });
-    logTiming('spotify.youtubeSearch', searchStartedAt);
+    dependencies.logTiming('spotify.youtubeSearch', searchStartedAt);
 
     const candidates = result.tracks
-        .map(candidate => ({ candidate, score: getSpotifyMatchScore(track, candidate) }))
+        .map(candidate => ({ candidate, score: dependencies.getMatchScore(track, candidate) }))
         .filter((entry): entry is { candidate: Track; score: number } => entry.score !== null)
         .sort((left, right) => right.score - left.score)
         .slice(0, 3);
 
     for (const { candidate } of candidates) {
         try {
-            const stream = await createYoutubeStream(candidate.url, candidate.live);
+            const stream = await dependencies.createStream(candidate.url, candidate.live);
             track.bridgedTrack = candidate;
             track.bridgedExtractor = candidate.extractor;
-            if (spotifyMatchCache.size >= 500) {
-                const oldestKey = spotifyMatchCache.keys().next().value;
-                if (oldestKey) spotifyMatchCache.delete(oldestKey);
+            if (dependencies.cache.size >= 500) {
+                const oldestKey = dependencies.cache.keys().next().value;
+                if (oldestKey) dependencies.cache.delete(oldestKey);
             }
-            spotifyMatchCache.set(matchKey, {
+            dependencies.cache.set(matchKey, {
                 candidate,
-                expiresAt: Date.now() + spotifyMatchCacheTtl,
+                expiresAt: dependencies.now() + dependencies.cacheTtl,
             });
             return stream;
         } catch {
@@ -73,3 +83,15 @@ export const createSpotifyStream = async (
 
     throw new Error(`No reliable YouTube match found for Spotify track "${track.author} - ${track.title}"`);
 };
+
+/* node:coverage disable */
+export const createSpotifyStream = createSpotifyBridge({
+    cache: spotifyMatchCache,
+    cacheTtl: spotifyMatchCacheTtl,
+    now: Date.now,
+    createStream: createYoutubeStream,
+    getMatchScore: getSpotifyMatchScore,
+    logTiming,
+    timingNow: () => performance.now(),
+});
+/* node:coverage enable */

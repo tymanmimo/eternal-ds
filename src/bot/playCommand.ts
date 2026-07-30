@@ -1,35 +1,46 @@
-import { useMainPlayer } from 'discord-player';
+import { Player, useMainPlayer } from 'discord-player';
 import { ChatInputCommandInteraction, EmbedBuilder, GuildMember } from 'discord.js';
 import { resolvePlayQuery } from '../media/resolvePlayQuery';
 import { createSpotifyStream } from '../media/spotify/bridge';
 import { logTiming } from '../performance';
 
-export const playCommand = async (interaction: ChatInputCommandInteraction) => {
-    const player = useMainPlayer();
+export interface PlayCommandDependencies {
+    getPlayer: typeof useMainPlayer;
+    resolvePlayQuery: typeof resolvePlayQuery;
+    createSpotifyStream: typeof createSpotifyStream;
+    logTiming: typeof logTiming;
+    now: () => number;
+}
+
+export const createPlayCommand = (dependencies: PlayCommandDependencies) => async (
+    interaction: ChatInputCommandInteraction,
+    currentPlayer?: Player,
+) => {
+    const player = currentPlayer ?? dependencies.getPlayer();
     const query = interaction.options.getString('query', true);
     const member = interaction.member as GuildMember;
     const channel = member.voice.channel;
 
     if (!channel) return interaction.editReply('First, go to the voice channel');
 
-    const commandStartedAt = performance.now();
+    const commandStartedAt = dependencies.now();
     try {
-        const searchStartedAt = performance.now();
-        const searchResult = await resolvePlayQuery(player, query, interaction.user);
-        logTiming('play.search', searchStartedAt);
+        const searchStartedAt = dependencies.now();
+        const searchResult = await dependencies.resolvePlayQuery(player, query, interaction.user);
+        dependencies.logTiming('play.search', searchStartedAt);
 
-        const playerStartedAt = performance.now();
+        const playerStartedAt = dependencies.now();
         const result = await player.play(channel, searchResult, {
             nodeOptions: {
                 metadata: { channel: interaction.channel },
                 leaveOnEnd: true,
                 leaveOnEmpty: true,
                 selfDeaf: true,
-                onBeforeCreateStream: track => createSpotifyStream(player, track),
+                onBeforeCreateStream: track => dependencies.createSpotifyStream(player, track),
             },
             requestedBy: interaction.user,
         });
-        logTiming('play.enqueue', playerStartedAt);
+        dependencies.logTiming('play.enqueue', playerStartedAt);
 
         const embed = new EmbedBuilder().setColor('#a600ff');
         const playlist = result.searchResult.playlist;
@@ -60,11 +71,21 @@ export const playCommand = async (interaction: ChatInputCommandInteraction) => {
         }
 
         const response = await interaction.editReply({ embeds: [embed] });
-        logTiming('play.command', commandStartedAt);
+        dependencies.logTiming('play.command', commandStartedAt);
         return response;
     } catch (error) {
         console.error(error);
-        logTiming('play.command', commandStartedAt, 'failed');
+        dependencies.logTiming('play.command', commandStartedAt, 'failed');
         return interaction.editReply('Could not find track or playlist...');
     }
 };
+
+/* node:coverage disable */
+export const playCommand = createPlayCommand({
+    getPlayer: useMainPlayer,
+    resolvePlayQuery,
+    createSpotifyStream,
+    logTiming,
+    now: () => performance.now(),
+});
+/* node:coverage enable */
