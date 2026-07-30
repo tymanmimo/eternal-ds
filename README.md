@@ -170,6 +170,19 @@ Run the bot in development mode:
 npm run dev
 ```
 
+Type-check the project and run the native Node.js test suite:
+
+``` bash
+npm run typecheck
+npm test
+```
+
+Run the suite with the enforced coverage thresholds:
+
+``` bash
+npm run test:coverage
+```
+
 ## Production Build
 
 Compile TypeScript:
@@ -219,3 +232,7 @@ runtime coordination is internal to `src/media/youtube`.
 
 -   FFmpeg is automatically provided via ffmpeg-static.
 -   YouTube account credentials and cookies are not used.
+
+## License
+
+Eternal DS is available under the [MIT License](LICENSE).

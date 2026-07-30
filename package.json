@@ -22,7 +22,7 @@
         "typescript"
     ],
     "author": "tymanmimo",
-    "license": "ISC",
+    "license": "MIT",
     "type": "commonjs",
     "repository": {
         "type": "git",
