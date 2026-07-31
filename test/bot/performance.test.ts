@@ -1,10 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createTimingLogger } = require('../../dist/performance');
+const { createTimingLogger } = require('../../dist/performance') as typeof import('../../src/performance');
 
 test('timing logger rounds elapsed time and includes outcome', () => {
-    const messages = [];
+    const messages: string[] = [];
     const logTiming = createTimingLogger({ now: () => 112.6, write: message => messages.push(message), enabled: () => true });
     logTiming('search', 100, 'failed');
     assert.deepEqual(messages, ['[Timing] search 13ms (failed)']);
@@ -12,7 +12,7 @@ test('timing logger rounds elapsed time and includes outcome', () => {
 
 test('timing logger does no work when disabled', () => {
     let nowCalled = false;
-    const messages = [];
+    const messages: string[] = [];
     const logTiming = createTimingLogger({
         now: () => { nowCalled = true; return 1; },
         write: message => messages.push(message),

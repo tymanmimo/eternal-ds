@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createSpotifyPlaylistThumbnailDecorator } = require('../../../dist/media/spotify/playlistThumbnail');
+const { createSpotifyPlaylistThumbnailDecorator } = require('../../../dist/media/spotify/playlistThumbnail') as typeof import('../../../src/media/spotify/playlistThumbnail');
+
+type ThumbnailDependencies = Parameters<typeof createSpotifyPlaylistThumbnailDecorator>[0];
+type Decorate = ReturnType<typeof createSpotifyPlaylistThumbnailDecorator>;
+const asSearchResult = (value: object) => value as unknown as Parameters<Decorate>[0];
 
 const result = () => ({
     playlist: {
@@ -14,14 +18,15 @@ const result = () => ({
         ],
     },
 });
-const settle = () => new Promise(resolve => setImmediate(resolve));
+const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 
 test('thumbnail decorator updates playlist and only missing/default track art', async () => {
     const decorated = result();
-    const decorate = createSpotifyPlaylistThumbnailDecorator({
+    const dependencies = {
         cache: new Map(), request: async () => 'https://image/cover.jpg',
-    });
-    decorate(decorated, 'spotify:url');
+    } satisfies ThumbnailDependencies;
+    const decorate = createSpotifyPlaylistThumbnailDecorator(dependencies);
+    decorate(asSearchResult(decorated), 'spotify:url');
     await settle();
     assert.equal(decorated.playlist.thumbnail, 'https://image/cover.jpg');
     assert.deepEqual(decorated.playlist.tracks.map(track => track.thumbnail), [
@@ -31,13 +36,14 @@ test('thumbnail decorator updates playlist and only missing/default track art', 
 
 test('thumbnail decorator shares in-flight requests', async () => {
     let requests = 0;
-    let complete;
-    const response = new Promise(resolve => { complete = resolve; });
-    const decorate = createSpotifyPlaylistThumbnailDecorator({
+    let complete: (value: string) => void = () => undefined;
+    const response = new Promise<string>(resolve => { complete = resolve; });
+    const dependencies = {
         cache: new Map(), request: async () => { requests++; return response; },
-    });
-    decorate(result(), 'same');
-    decorate(result(), 'same');
+    } satisfies ThumbnailDependencies;
+    const decorate = createSpotifyPlaylistThumbnailDecorator(dependencies);
+    decorate(asSearchResult(result()), 'same');
+    decorate(asSearchResult(result()), 'same');
     assert.equal(requests, 1);
     complete('image');
     await settle();
@@ -45,22 +51,24 @@ test('thumbnail decorator shares in-flight requests', async () => {
 
 test('failed thumbnail requests are evicted so they can be retried', async () => {
     let requests = 0;
-    const decorate = createSpotifyPlaylistThumbnailDecorator({
+    const dependencies = {
         cache: new Map(), request: async () => { requests++; return null; },
-    });
-    decorate(result(), 'retry');
+    } satisfies ThumbnailDependencies;
+    const decorate = createSpotifyPlaylistThumbnailDecorator(dependencies);
+    decorate(asSearchResult(result()), 'retry');
     await settle();
-    decorate(result(), 'retry');
+    decorate(asSearchResult(result()), 'retry');
     await settle();
     assert.equal(requests, 2);
 });
 
 test('thumbnail decorator ignores non-Spotify results', async () => {
     let requested = false;
-    const decorate = createSpotifyPlaylistThumbnailDecorator({
+    const dependencies = {
         cache: new Map(), request: async () => { requested = true; return 'image'; },
-    });
-    decorate({ playlist: { source: 'youtube' } }, 'query');
+    } satisfies ThumbnailDependencies;
+    const decorate = createSpotifyPlaylistThumbnailDecorator(dependencies);
+    decorate(asSearchResult({ playlist: { source: 'youtube' } }), 'query');
     await settle();
     assert.equal(requested, false);
 });

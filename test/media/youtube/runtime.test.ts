@@ -3,13 +3,16 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const test = require('node:test');
-const { createManualTimers } = require('../../helpers/fakeChildProcess');
+type HelpersModule = {
+    createManualTimers: import('../../helpers/fakeChildProcess').CreateManualTimers;
+};
+const { createManualTimers } = require('../../helpers/fakeChildProcess.ts') as HelpersModule;
 const distRoot = process.env.YOUTUBE_DIST_ROOT || path.resolve(__dirname, '../../../dist');
 const {
     createYoutubeDlRuntime,
     getYoutubeDlProcessError,
     sanitizeYoutubeDlError,
-} = require(path.join(distRoot, 'media/youtube/runtime'));
+} = require(path.join(distRoot, 'media/youtube/runtime')) as typeof import('../../../src/media/youtube/runtime');
 
 test('runtime exposes injected executable, arguments, and bounded settings', () => {
     const runtime = createYoutubeDlRuntime({
@@ -38,11 +41,11 @@ test('stream leases are idempotent and isolated per runtime', () => {
 
 test('lock serializes operations and releases after rejection', async () => {
     const runtime = createYoutubeDlRuntime();
-    let releaseFirst;
-    const order = [];
+    let releaseFirst: () => void = () => undefined;
+    const order: string[] = [];
     const first = runtime.withYoutubeDlLock(async () => {
         order.push('first');
-        await new Promise(resolve => { releaseFirst = resolve; });
+        await new Promise<void>(resolve => { releaseFirst = resolve; });
         throw new Error('failed');
     });
     const second = runtime.withYoutubeDlLock(async () => { order.push('second'); });
@@ -56,9 +59,13 @@ test('lock serializes operations and releases after rejection', async () => {
 
 test('update state clears on settlement and wait timeout is deterministic', async () => {
     const timers = createManualTimers();
-    const runtime = createYoutubeDlRuntime(timers);
-    let finish;
-    const update = runtime.setYoutubeDlUpdate(new Promise(resolve => { finish = resolve; }));
+    const options = {
+        setTimeout: timers.setTimeout,
+        clearTimeout: timers.clearTimeout,
+    } satisfies Parameters<typeof createYoutubeDlRuntime>[0];
+    const runtime = createYoutubeDlRuntime(options);
+    let finish: () => void = () => undefined;
+    const update = runtime.setYoutubeDlUpdate(new Promise<void>(resolve => { finish = resolve; }));
     assert.equal(runtime.hasYoutubeDlUpdate(), true);
     const wait = runtime.waitForYoutubeDlUpdate(20);
     timers.advance(20);

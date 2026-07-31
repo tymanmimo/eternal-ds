@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { commandDefinitions, commandNames } = require('../../dist/bot/commandDefinitions');
+const { commandDefinitions, commandNames } = require('../../dist/bot/commandDefinitions') as typeof import('../../src/bot/commandDefinitions');
 
 test('command definitions expose every command with unique names', () => {
     assert.deepEqual(commandNames, {
@@ -13,6 +13,7 @@ test('command definitions expose every command with unique names', () => {
 
 test('play command requires a string query and all commands have descriptions', () => {
     const play = commandDefinitions.find(command => command.name === commandNames.play);
+    if (!play?.options) throw new Error('Play command definition is missing options');
     assert.ok(commandDefinitions.every(command => command.description));
     assert.equal(play.options.length, 1);
     assert.equal(play.options[0].name, 'query');

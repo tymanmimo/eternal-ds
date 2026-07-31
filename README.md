@@ -170,7 +170,7 @@ Run the bot in development mode:
 npm run dev
 ```
 
-Type-check the project and run the native Node.js test suite:
+Type-check the project and run the native TypeScript test suite with Node.js:
 
 ``` bash
 npm run typecheck

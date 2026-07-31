@@ -1,34 +1,60 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createInteractionHandler } = require('../../dist/bot/interactionHandler');
-const { playerControlIds } = require('../../dist/player/ui');
+const { createInteractionHandler } = require('../../dist/bot/interactionHandler') as typeof import('../../src/bot/interactionHandler');
+const { playerControlIds } = require('../../dist/player/ui') as typeof import('../../src/player/ui');
+type HandlerDependencies = Parameters<typeof createInteractionHandler>[0];
+type RegisterHandler = ReturnType<typeof createInteractionHandler>;
 
 const ok = { ok: true, message: 'ok' };
-const createHarness = (overrides = {}, queue = { currentTrack: {} }) => {
-    let handler;
-    const calls = [];
-    const dependencies = {
-        playCommand: async interaction => calls.push(['play', interaction]),
+type FakeInteraction = ReturnType<typeof command> | ReturnType<typeof button>;
+type InteractionListener = (interaction: FakeInteraction) => Promise<void>;
+
+type FakeDependencies = Omit<HandlerDependencies, 'createPlayerControls'> & {
+    createPlayerControls: (current: unknown) => unknown;
+};
+
+const asControlFactory = (value: FakeDependencies['createPlayerControls']) => value as unknown as HandlerDependencies['createPlayerControls'];
+const asClient = (value: object) => value as unknown as Parameters<RegisterHandler>[0];
+const asPlayer = (value: object) => value as unknown as Parameters<RegisterHandler>[1];
+const asListener = (value: unknown) => value as InteractionListener;
+const asCommandResponse = (value: object) => value as unknown as Awaited<ReturnType<HandlerDependencies['playCommand']>>;
+
+const createHarness = (
+    overrides: Partial<FakeDependencies> = {},
+    queue: { currentTrack: object } | null | (() => { currentTrack: object } | null) = { currentTrack: {} },
+) => {
+    let handler: InteractionListener = async () => undefined;
+    const calls: unknown[][] = [];
+    const fakeDependencies: FakeDependencies = {
+        playCommand: async interaction => { calls.push(['play', interaction]); return asCommandResponse({}); },
         playPreviousTrack: async guild => { calls.push(['previous', guild]); return ok; },
         skipTrack: guild => { calls.push(['skip', guild]); return ok; },
         stopPlayback: guild => { calls.push(['stop', guild]); return ok; },
         togglePause: guild => { calls.push(['pause', guild]); return ok; },
         toggleTrackRepeat: guild => { calls.push(['repeat', guild]); return ok; },
         createPlayerControls: current => ({ current }),
-        logTiming: (...args) => calls.push(['timing', ...args]),
+        logTiming: (...args) => { calls.push(['timing', ...args]); },
         now: () => 50,
         ...overrides,
     };
-    createInteractionHandler(dependencies)(
-        { on: (name, listener) => { assert.equal(name, 'interactionCreate'); handler = listener; } },
-        { nodes: { get: () => typeof queue === 'function' ? queue() : queue } },
-    );
-    return { invoke: interaction => handler(interaction), calls };
+    const dependencies = {
+        ...fakeDependencies,
+        createPlayerControls: asControlFactory(fakeDependencies.createPlayerControls),
+    } satisfies HandlerDependencies;
+    const client = {
+        on: (name: string, listener: unknown) => {
+            assert.equal(name, 'interactionCreate');
+            handler = asListener(listener);
+        },
+    };
+    const player = { nodes: { get: () => typeof queue === 'function' ? queue() : queue } };
+    createInteractionHandler(dependencies)(asClient(client), asPlayer(player));
+    return { invoke: (interaction: FakeInteraction) => handler(interaction), calls };
 };
 
-const command = (name, guildId = 'guild') => {
-    const calls = [];
+const command = (name: string, guildId: string | null = 'guild') => {
+    const calls: unknown[][] = [];
     return {
         commandName: name,
         guildId,
@@ -36,16 +62,16 @@ const command = (name, guildId = 'guild') => {
         replied: false,
         isChatInputCommand: () => true,
         isButton: () => false,
-        deferReply: async value => { calls.push(['deferReply', value]); },
-        reply: async value => { calls.push(['reply', value]); },
-        editReply: async value => { calls.push(['editReply', value]); },
-        followUp: async value => { calls.push(['followUp', value]); },
+        deferReply: async (value?: unknown) => { calls.push(['deferReply', value]); },
+        reply: async (value: unknown) => { calls.push(['reply', value]); },
+        editReply: async (value: unknown) => { calls.push(['editReply', value]); },
+        followUp: async (value: unknown) => { calls.push(['followUp', value]); },
         calls,
     };
 };
 
-const button = customId => {
-    const calls = [];
+const button = (customId: string) => {
+    const calls: unknown[][] = [];
     const interaction = {
         customId,
         guildId: 'guild',
@@ -54,9 +80,9 @@ const button = customId => {
         isChatInputCommand: () => false,
         isButton: () => true,
         deferUpdate: async () => { interaction.deferred = true; calls.push(['deferUpdate']); },
-        update: async value => { interaction.replied = true; calls.push(['update', value]); },
-        reply: async value => { interaction.replied = true; calls.push(['reply', value]); },
-        followUp: async value => { calls.push(['followUp', value]); },
+        update: async (value: unknown) => { interaction.replied = true; calls.push(['update', value]); },
+        reply: async (value: unknown) => { interaction.replied = true; calls.push(['reply', value]); },
+        followUp: async (value: unknown) => { calls.push(['followUp', value]); },
         calls,
     };
     return interaction;
@@ -93,7 +119,7 @@ test('button routing updates controls and acknowledges action failures', async (
     const pause = button(playerControlIds.pauseResume);
     await harness.invoke(pause);
     assert.equal(pause.calls[0][0], 'update');
-    assert.equal(harness.calls.at(-1)[0], 'timing');
+    assert.equal(harness.calls.at(-1)?.[0], 'timing');
 
     const failedHarness = createHarness({ skipTrack: () => ({ ok: false, message: 'cannot skip' }) });
     const skip = button(playerControlIds.skip);
@@ -120,9 +146,9 @@ test('button routing acknowledges a successful action when the queue becomes emp
 });
 
 test('guild button lock acknowledges concurrent interactions without a second action', async () => {
-    let release;
+    let release: () => void = () => undefined;
     let previousCalls = 0;
-    const pending = new Promise(resolve => { release = resolve; });
+    const pending = new Promise<void>(resolve => { release = resolve; });
     const harness = createHarness({
         playPreviousTrack: async () => { previousCalls++; await pending; return ok; },
     });
